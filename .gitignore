@@ -6,9 +6,6 @@ __pycache__/
 # Environments
 venv/
 
-# Flask SQLAlchemy
-migrations/
-
 # PyCharm
 .idea/
 
