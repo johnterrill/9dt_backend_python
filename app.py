@@ -1,41 +1,16 @@
 #!flask/bin/python
-from datetime import datetime
+from data_provider import MoveDAO, GameDAO
 from flask import Blueprint, Flask, jsonify, request
 from flask_restful import abort, Api, Resource
-from flask_sqlalchemy import SQLAlchemy
-from pickle import dumps, loads
+from sql_data_provider import SQLAlchemyDataProvider
 from uuid import uuid4
 
-app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://localhost/9dt'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-db = SQLAlchemy(app)
+flask_app = Flask(__name__)
+flask_app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://localhost/9dt'
+flask_app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+data_provider = SQLAlchemyDataProvider(flask_app)
 api_blueprint = Blueprint('drop_token_api', __name__)
 api = Api(api_blueprint)
-
-
-###
-# DB Models
-###
-class Game(db.Model):
-    id = db.Column(db.String, nullable=False, primary_key=True, unique=True)
-    columns = db.Column(db.Integer, nullable=False)
-    rows = db.Column(db.Integer, nullable=False)
-    initial_players = db.Column(db.String, nullable=False)
-    active_players = db.Column(db.String, nullable=False)
-    current_active_player_index = db.Column(db.Integer, nullable=False, default=0)
-    state = db.Column(db.Integer, nullable=False, default=0)
-    winner = db.Column(db.String, nullable=True)
-    moves = db.relationship('Move', backref=db.backref('games', lazy=True))
-
-
-class Move(db.Model):
-    id = db.Column(db.Integer, nullable=False, primary_key=True)
-    player_id = db.Column(db.String, nullable=False)
-    pub_date = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-    game_id = db.Column(db.String, db.ForeignKey('game.id'), nullable=False)
-    move_type = db.Column(db.String, nullable=False)
-    column = db.Column(db.Integer, nullable=True)
 
 
 ###
@@ -43,8 +18,7 @@ class Move(db.Model):
 ###
 class GameStateAPI(Resource):
     def get(self):
-        games = Game.query.all()
-        return jsonify({'games': [game.id for game in games if game.state is 0]})
+        return jsonify({'games': data_provider.get_all_game_ids(active_only=True)})
 
     def post(self):
         players = request.json.get('players')
@@ -57,17 +31,17 @@ class GameStateAPI(Resource):
         if type(rows) is not int or rows <= 0:
             abort(400, message='columns argument missing or invalid.')
         game_id = str(uuid4())
-        db.session.add(Game(id=game_id, columns=columns, rows=rows,
-                            initial_players=dumps(players), active_players=dumps(players)))
-        db.session.commit()
+        data_provider.create_game(game_id, columns, rows, players)
         return jsonify({'gameId': game_id})
 
 
 class GameStateByIdAPI(Resource):
     def get(self, game_id):
         game = get_game_by_id(game_id, active_only=False, serialize_players=True)
+        if not game:
+            abort(404, message='Game not found')
         output = {'players': game.initial_players_list}
-        if game.state is 0:
+        if game.state is GameDAO.GAME_STATE_IN_PROGRESS:
             output['state'] = 'IN_PROGRESS'
         else:
             output['state'] = 'DONE'
@@ -88,6 +62,8 @@ class MoveListAPI(Resource):
     def get(self, game_id):
         game = get_game_by_id(game_id, active_only=False)
         move_len = len(game.moves)
+        if move_len == 0:
+            return jsonify({'moves': []})
         # Set start index
         start_arg = request.args.get('start')
         start_index = parse_argument_as_number(start_arg) if start_arg else 0
@@ -108,23 +84,18 @@ class MoveListAPI(Resource):
 
 
 class PlayerMoveAPI(Resource):
-    REQUEST_DATA_KEY_MOVE_COLUMN = 'column'
-
     def post(self, game_id, player_id):
-        move_column = request.json.get(self.REQUEST_DATA_KEY_MOVE_COLUMN)
+        move_column = request.json.get('column')
         if type(move_column) is not int:
             abort(400, message='Malformed move input.')
         game = get_game_for_player_with_board(game_id, player_id)
-        if game.state is 1:
+        if game.state is GameDAO.GAME_STATE_DONE:
             abort(409, message='Not the provided players turn.')
         if move_column < 0 or move_column > game.columns:
             abort(400, message='Illegal move.')
         if game.board[move_column][0] != '':
             abort(400, message='Illegal move.')
-        if game.active_players_list[game.current_active_player_index] != player_id:
-            abort(409, message='Not the provided players turn.')
         move_number = len(game.moves)
-        game.moves.append(Move(player_id=player_id, move_type='MOVE', column=move_column))
         game.current_active_player_index = (game.current_active_player_index + 1) % len(game.active_players_list)
         move_row = game.rows - 1
         while move_row >= 0:
@@ -137,7 +108,7 @@ class PlayerMoveAPI(Resource):
             game.state = 1
         elif is_game_draw(game):
             game.state = 1
-        db.session.commit()
+        data_provider.persist_new_move_and_game_state(game, player_id, move_type=MoveDAO.TYPE_MOVE, column=move_column)
         return jsonify({'move': '{}/moves/{}'.format(game_id, move_number)})
 
     def delete(self, game_id, player_id):
@@ -148,12 +119,10 @@ class PlayerMoveAPI(Resource):
         elif quitting_player_index is len(game.active_players_list) - 1:
             game.current_active_player_index = 0
         game.active_players_list.remove(player_id)
-        game.active_players = dumps(game.active_players_list)
         if len(game.active_players_list) is 1:
             game.state = 1
             game.winner = game.active_players_list[0]
-        game.moves.append(Move(player_id=player_id, move_type='QUIT'))
-        db.session.commit()
+        data_provider.persist_new_move_and_game_state(game, player_id, MoveDAO.TYPE_QUIT)
         return {}, 202
 
 
@@ -169,34 +138,20 @@ def get_move_output(move):
 
 
 def get_game_by_id(game_id, player_id=None, active_only=True, serialize_players=False):
-    game = Game.query.filter_by(id=game_id).first()
+    game = data_provider.get_game_by_id(game_id, player_id=player_id, serialize_players=serialize_players)
     if not game:
         abort(404, message='Game not found')
-    if game.state is 1 and active_only:
+    if game.state is GameDAO.GAME_STATE_DONE and active_only:
         abort(410, message='Game is already in DONE state.')
-    if player_id:
-        game.active_players_list = loads(game.active_players)
-        game.initial_players_list = loads(game.initial_players)
-        if not any(player_id in player for player in game.active_players_list):
-            abort(404, message='Player not apart of the provided game.')
-    elif serialize_players:
-        game.active_players_list = loads(game.active_players)
-        game.initial_players_list = loads(game.initial_players)
-
     return game
 
 
 def get_game_for_player_with_board(game_id, player_id):
-    game = get_game_by_id(game_id, player_id=player_id)
-    game.board = [['' for x in range(game.rows)] for y in range(game.columns)]
-    move_type_gen = (move for move in game.moves if move.move_type == 'MOVE')
-    for move in move_type_gen:
-        row_index = game.rows - 1
-        while row_index >= 0:
-            if game.board[move.column][row_index] is '':
-                game.board[move.column][row_index] = move.player_id
-                break
-            row_index -= 1
+    game = data_provider.get_game_for_player_with_board(game_id, player_id=player_id)
+    if game.state is GameDAO.GAME_STATE_DONE:
+        abort(409, message='Not the provided players turn.')
+    if game.active_players_list[game.current_active_player_index] != player_id:
+        abort(409, message='Not the provided players turn.')
     return game
 
 
@@ -236,7 +191,7 @@ api.add_resource(GameStateByIdAPI, '/drop_token/<game_id>')
 api.add_resource(PlayerMoveAPI, '/drop_token/<game_id>/<player_id>')
 api.add_resource(MoveAPI, '/drop_token/<game_id>/moves/<move_number_unicode>')
 api.add_resource(MoveListAPI, '/drop_token/<game_id>/moves')
-app.register_blueprint(api_blueprint)
+flask_app.register_blueprint(api_blueprint)
 
 if __name__ == '__main__':
-    app.run()
+    flask_app.run()
