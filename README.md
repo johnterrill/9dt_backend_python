@@ -2,7 +2,39 @@
 This is a Python 2.7 based project; once the Local Setup Instructions have been complete the API will be available at: http://127.0.0.1:5000/drop_token 
 ## Local Setup Instructions ##
 The following instructions assume you are using a OSX machine and have [Homebrew](https://brew.sh/), [Python](http://docs.python-guide.org/en/latest/starting/install/osx/) and [Virtualenv](http://exponential.io/blog/2015/02/10/install-virtualenv-and-virtualenvwrapper-on-mac-os-x/) installed.
-###  ###
+Additionally it's recommended that you use [PyCharm](http://macappstore.org/pycharm/) for development, because it's awesome.
+### Intialize Python Virtual Environment ###
+From the project directory run:
+```bash
+virtualenv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+### Install Postgresql Database ###
+```bash
+# Install Postgresql via Brew
+brew doctor
+brew update
+brew install postgresql
+# Startup Postgresql
+brew services start postgresql
+# Create required databases
+createdb `whoami`	# Must be run first to initialize Postgresql
+createdb 9dt
+createdb 9dt_test
+# Create DB Tables defined in code
+python database.py
+```
+### Run application ###
+From the project directory run:
+```bash
+python app.py
+```
+### Run unit tests ###
+From the project directory run:
+```bash
+nosetests
+```
 ## Rules of the Game ##
 Drop Token takes place on a 4x4 grid. A token is dropped along a column and said token goes to the lowest unoccupied row of the board. A player wins when they have 4 tokens next to each other either along a row, in a column, or on a diagonal. If the board is filled, and nobody has won then the game is a draw. Each player takes a turn, starting with player 1, until the game reaches either win or draw. If a player tries to put a token in a column that is already full, that results in an error state, and the player must play again until the play a valid move.
 ## Example Game
