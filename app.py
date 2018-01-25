@@ -118,9 +118,9 @@ class PlayerMoveAPI(Resource):
             move_row -= 1
         if is_winning_move(game, player_id, move_column, move_row):
             game.winner = player_id
-            game.state = 1
+            game.state = GameDAO.GAME_STATE_DONE
         elif is_game_draw(game):
-            game.state = 1
+            game.state = GameDAO.GAME_STATE_DONE
         data_provider.persist_new_move_and_game_state(game, player_id, move_type=MoveDAO.TYPE_MOVE, column=move_column)
         return jsonify({'move': '{}/moves/{}'.format(game_id, move_number)})
 
@@ -134,7 +134,7 @@ class PlayerMoveAPI(Resource):
             game.current_active_player_index = 0
         game.active_players_list.remove(player_id)
         if len(game.active_players_list) is 1:
-            game.state = 1
+            game.state = GameDAO.GAME_STATE_DONE
             game.winner = game.active_players_list[0]
         data_provider.persist_new_move_and_game_state(game, player_id, MoveDAO.TYPE_QUIT)
         return {}, 202
