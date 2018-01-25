@@ -121,7 +121,7 @@ class PlayerMoveAPI(Resource):
             game.state = GameDAO.GAME_STATE_DONE
         elif is_game_draw(game):
             game.state = GameDAO.GAME_STATE_DONE
-        data_provider.persist_new_move_and_game_state(game, player_id, move_type=MoveDAO.TYPE_MOVE, column=move_column)
+        data_provider.persist_new_move_and_game_state(game, player_id, MoveDAO.TYPE_MOVE, column=move_column)
         return jsonify({'move': '{}/moves/{}'.format(game_id, move_number)})
 
     def delete(self, game_id, player_id):

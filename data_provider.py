@@ -17,9 +17,9 @@ class GameDAO(object):
     GAME_STATE_IN_PROGRESS = 0
     GAME_STATE_DONE = 1
 
-    def __init__(self, id, columns, rows, current_active_player_index=0, active_players_list=[],
+    def __init__(self, game_id, columns, rows, current_active_player_index=0, active_players_list=[],
                  initial_players_list=[], state=GAME_STATE_IN_PROGRESS, winner=None, moves=[], board=None):
-        self.id = id
+        self.id = game_id
         self.columns = columns
         self.rows = rows
         self.active_players_list = active_players_list
@@ -28,7 +28,7 @@ class GameDAO(object):
         self.state = state
         self.winner = winner
         self.moves = [MoveDAO(move.player_id, move.move_type, move.column) for move in moves]
-        self.board = None
+        self.board = board
 
 
 class DataProviderInterface(Interface):
