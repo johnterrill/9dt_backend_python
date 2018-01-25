@@ -12,15 +12,20 @@ data_provider = SQLAlchemyDataProvider(flask_app)
 api_blueprint = Blueprint('drop_token_api', __name__)
 api = Api(api_blueprint)
 
+MOVE_DIRECTIONS = (1, 0), (0, 1), (1, 1), (-1, 0), (0, -1), (-1, 1), (1, -1), (-1, -1)
+
 
 ###
 # API resource methods
 ###
 class GameStateAPI(Resource):
+    """ Handles creating a new game and providing all the Game IDs of active games. """
     def get(self):
+        """ Return all in-progress games. """
         return jsonify({'games': data_provider.get_all_active_game_ids()})
 
     def post(self):
+        """ Create a new game. """
         players = request.json.get('players')
         if not players or len(players) < 2:
             abort(400, message='players argument missing or invalid.')
@@ -36,7 +41,9 @@ class GameStateAPI(Resource):
 
 
 class GameStateByIdAPI(Resource):
+    """ Handles providing the state of a single game. """
     def get(self, game_id):
+        """ Get the state of the game. """
         game = get_game_by_id(game_id, active_only=False, serialize_players=True)
         if not game:
             abort(404, message='Game not found')
@@ -50,7 +57,9 @@ class GameStateByIdAPI(Resource):
 
 
 class MoveAPI(Resource):
+    """ Handles providing the details of a given move. """
     def get(self, game_id, move_number_unicode):
+        """ Return a move. """
         move_number = parse_argument_as_number(move_number_unicode)
         game = get_game_by_id(game_id, active_only=False)
         if move_number < 0 or move_number >= len(game.moves):
@@ -59,7 +68,9 @@ class MoveAPI(Resource):
 
 
 class MoveListAPI(Resource):
+    """ Handles providing a list of moves for a given game. """
     def get(self, game_id):
+        """ Get (sub) list of moves played. """
         game = get_game_by_id(game_id, active_only=False)
         move_len = len(game.moves)
         if move_len == 0:
@@ -84,7 +95,9 @@ class MoveListAPI(Resource):
 
 
 class PlayerMoveAPI(Resource):
+    """ Handles the moves made by a player; such as making a move or quiting the game. """
     def post(self, game_id, player_id):
+        """ Post a move. """
         move_column = request.json.get('column')
         if type(move_column) is not int:
             abort(400, message='Malformed move input.')
@@ -112,6 +125,7 @@ class PlayerMoveAPI(Resource):
         return jsonify({'move': '{}/moves/{}'.format(game_id, move_number)})
 
     def delete(self, game_id, player_id):
+        """ Player quits a game. """
         game = get_game_by_id(game_id, player_id=player_id)
         quitting_player_index = game.active_players_list.index(player_id)
         if quitting_player_index < game.current_active_player_index:
@@ -130,6 +144,7 @@ class PlayerMoveAPI(Resource):
 # Util methods
 ###
 def get_move_output(move):
+    """ Provides the parsing the given move into the desired output. """
     result = {'type': move.move_type,
               'player': move.player_id}
     if move.column is not None:
@@ -138,6 +153,7 @@ def get_move_output(move):
 
 
 def get_game_by_id(game_id, player_id=None, active_only=True, serialize_players=False):
+    """ Retrieves the game from the data_provider, and validates whether the provided parameter criteria is met. """
     game = data_provider.get_game_by_id(game_id, player_id=player_id, serialize_players=serialize_players)
     if not game:
         abort(404, message='Game not found')
@@ -147,6 +163,7 @@ def get_game_by_id(game_id, player_id=None, active_only=True, serialize_players=
 
 
 def get_game_for_player_with_board(game_id, player_id):
+    """ Retrieves the game from the data_provider, and validates whether the provided parameter criteria is met. """
     game = data_provider.get_game_for_player_with_board(game_id, player_id=player_id)
     if game.state is GameDAO.GAME_STATE_DONE:
         abort(409, message='Not the provided players turn.')
@@ -156,13 +173,14 @@ def get_game_for_player_with_board(game_id, player_id):
 
 
 def is_game_draw(game):
+    """ Determines whether the game, in its current state, is a draw. """
     total_moves = game.columns * game.rows
     return sum(1 for move in game.moves if move.move_type == 'MOVE') is total_moves
 
 
 def is_winning_move(game, player_id, move_column, move_row):
-    move_directions = (1, 0), (0, 1), (1, 1), (-1, 0), (0, -1), (-1, 1), (1, -1), (-1, -1)
-    for direction in move_directions:
+    """ Determines if the provided move wins the game. """
+    for direction in MOVE_DIRECTIONS:
         visited = 1
         while visited <= 4:
             try:
@@ -178,6 +196,7 @@ def is_winning_move(game, player_id, move_column, move_row):
 
 
 def parse_argument_as_number(argument):
+    """ Parses and validates the provided string argument as an integer. """
     try:
         return int(argument)
     except ValueError:
