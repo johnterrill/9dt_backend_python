@@ -1,15 +1,17 @@
 import unittest
 
 from app import flask_app, data_provider
-from data_provider import GameDAO
+from data_provider import GameDAO, MoveDAO
 from json import dumps, loads
 from mock import MagicMock
 from sys import getdefaultencoding
 
+EXPECTED_COLUMNS, EXPECTED_ROWS = 4, 4
 EXPECTED_GAME_ID = 'EXPECTED_GAME_MODEL_ID'
 EXPECTED_PLAYER_1, EXPECTED_PLAYER_2 = 'EXPECTED_PLAYER_1', 'EXPECTED_PLAYER_2'
+EXPECTED_MOVE_VALUES_ACTIVE_GAME = [('player1', MoveDAO.TYPE_MOVE, 0), ('player2', MoveDAO.TYPE_MOVE, 0),
+                                    ('player1', MoveDAO.TYPE_QUIT, None)]
 EXPECTED_PLAYERS = [EXPECTED_PLAYER_1, EXPECTED_PLAYER_2]
-EXPECTED_COLUMNS, EXPECTED_ROWS = 4, 4
 
 
 def parse_json_response(response):
@@ -25,7 +27,7 @@ class BaseTest(unittest.TestCase):
 class GameStateTest(BaseTest):
     def test_get_all_games_initial(self):
         # GIVEN the initial empty state (no games created)
-        data_provider.get_all_game_ids = MagicMock(return_value=[])
+        data_provider.get_all_active_game_ids = MagicMock(return_value=[])
         # WHEN GET all games is called.
         response = self.app.get('/drop_token')
         # THEN the response code is 200
@@ -35,7 +37,7 @@ class GameStateTest(BaseTest):
 
     def test_get_all_games(self):
         # GIVEN there is an in-progress game
-        data_provider.get_all_game_ids = MagicMock(return_value=[EXPECTED_GAME_ID])
+        data_provider.get_all_active_game_ids = MagicMock(return_value=[EXPECTED_GAME_ID])
         # WHEN GET all games is called
         response = self.app.get('/drop_token')
         # THEN the response code is 200
@@ -150,6 +152,38 @@ class GameStateByIdTest(BaseTest):
         data_provider.get_game_by_id = MagicMock(return_value=None)
         # WHEN GET game state is called with a non-existent gameId
         response = self.app.get('/drop_token/{}'.format('foo'))
+        # THEN the response code is 404
+        self.assertEquals(response.status_code, 404)
+
+
+class MoveListTest(BaseTest):
+    def test_get_list_of_moves(self):
+        # GIVEN a list of moves
+        moves = [MoveDAO(move[0], move_type=move[1], column=move[2]) for move in EXPECTED_MOVE_VALUES_ACTIVE_GAME]
+        # GIVEN a game with the moves
+        data_provider.get_game_by_id = MagicMock(return_value=GameDAO(EXPECTED_GAME_ID, EXPECTED_COLUMNS, EXPECTED_ROWS,
+                                                                      active_players_list=EXPECTED_PLAYERS,
+                                                                      initial_players_list=EXPECTED_PLAYERS,
+                                                                      moves=moves))
+        # WHEN GET list of moves played is called
+        response = self.app.get('/drop_token/{}/moves'.format(EXPECTED_GAME_ID))
+        # THEN the response code is 200
+        self.assertEquals(response.status_code, 200)
+        # THEN the response output contains all the moves
+        output_moves = parse_json_response(response.get_data())['moves']
+        self.assertEquals(len(output_moves), len(EXPECTED_MOVE_VALUES_ACTIVE_GAME))
+        # THEN the response output values contain the expected values
+        for index, move in enumerate(EXPECTED_MOVE_VALUES_ACTIVE_GAME):
+            if move[2] is not None:
+                self.assertEquals(output_moves[index]['column'], move[2])
+            self.assertEquals(output_moves[index]['player'], move[0])
+            self.assertEquals(output_moves[index]['type'], move[1])
+
+    def test_get_list_of_moves_game_not_found(self):
+        # GIVEN a game is not found
+        data_provider.get_game_by_id = MagicMock(return_value=None)
+        # WHEN GET list of moves is called with a non-existent gameId
+        response = self.app.get('/drop_token/{}/moves'.format('foo'))
         # THEN the response code is 404
         self.assertEquals(response.status_code, 404)
 

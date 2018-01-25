@@ -37,7 +37,7 @@ class GetAllGameIdsTest(BaseTest):
     def test_get_all_game_ids_initial(self):
         # GIVEN the initial empty state (no games created)
         # WHEN get all game ids is called.
-        result = self.data_provider.get_all_game_ids()
+        result = self.data_provider.get_all_active_game_ids()
         # THEN the result is an EMPTY list
         self.assertEquals(result, [])
 
@@ -47,7 +47,7 @@ class GetAllGameIdsTest(BaseTest):
             db.session.add(get_test_game_model())
             db.session.commit()
         # WHEN get all game ids is called.
-        result = self.data_provider.get_all_game_ids()
+        result = self.data_provider.get_all_active_game_ids()
         # THEN the result is an EMPTY list
         self.assertEquals(result, [EXPECTED_GAME_ID])
 
