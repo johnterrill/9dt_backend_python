@@ -18,7 +18,7 @@ api = Api(api_blueprint)
 ###
 class GameStateAPI(Resource):
     def get(self):
-        return jsonify({'games': data_provider.get_all_game_ids(active_only=True)})
+        return jsonify({'games': data_provider.get_all_active_game_ids()})
 
     def post(self):
         players = request.json.get('players')

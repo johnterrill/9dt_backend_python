@@ -39,7 +39,7 @@ class SQLAlchemyDataProvider(implements(DataProviderInterface)):
         self.app = app
         db.init_app(app)
 
-    def get_all_game_ids(self):
+    def get_all_active_game_ids(self):
         with self.app.app_context():
             games = Game.query.all()
             return [game.id for game in games if game.state is GameDAO.GAME_STATE_IN_PROGRESS]

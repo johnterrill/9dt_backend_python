@@ -33,7 +33,7 @@ class GameDAO(object):
 
 class DataProviderInterface(Interface):
     """ Defines the interface for accessing application data. All implementations must return DAO objects. """
-    def get_all_game_ids(self):
+    def get_all_active_game_ids(self):
         """
         Provides a list of all in-progress game IDs.
 
