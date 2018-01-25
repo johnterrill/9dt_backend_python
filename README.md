@@ -1,5 +1,5 @@
 # 98Point6 Drop-Token #
-This is a Python 2.7 based project; once the Local Setup Instructions have been complete the API will be available at: http://127.0.0.1:5000/drop_token 
+This is a Python 2.7 based project; once the Local Setup Instructions have been complete the API will be available at: http://127.0.0.1:5000
 ## Local Setup Instructions ##
 The following instructions assume you are using a OSX machine and have [Homebrew](https://brew.sh/), [Python](http://docs.python-guide.org/en/latest/starting/install/osx/) and [Virtualenv](http://exponential.io/blog/2015/02/10/install-virtualenv-and-virtualenvwrapper-on-mac-os-x/) installed.
 Additionally it's recommended that you use [PyCharm](http://macappstore.org/pycharm/) for development, because it's awesome.
