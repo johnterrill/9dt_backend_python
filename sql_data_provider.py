@@ -11,6 +11,7 @@ db = SQLAlchemy()
 # DB Models
 ###
 class Game(db.Model):
+    """ A SQLAlchemy DB definition of the Game object. """
     id = db.Column(db.String, nullable=False, primary_key=True, unique=True)
     columns = db.Column(db.Integer, nullable=False)
     rows = db.Column(db.Integer, nullable=False)
@@ -23,6 +24,7 @@ class Game(db.Model):
 
 
 class Move(db.Model):
+    """ A SQLAlchemy DB definition of the Move object. """
     id = db.Column(db.Integer, nullable=False, primary_key=True)
     player_id = db.Column(db.String, nullable=False)
     pub_date = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
@@ -32,15 +34,15 @@ class Move(db.Model):
 
 
 class SQLAlchemyDataProvider(implements(DataProviderInterface)):
+    """ A SQLAlchemy implementation of the DataProviderInterface. """
     def __init__(self, app):
         self.app = app
         db.init_app(app)
 
-    def get_all_game_ids(self, active_only=True):
+    def get_all_game_ids(self):
         with self.app.app_context():
             games = Game.query.all()
-            active_state = 0 if active_only else 1
-            return [game.id for game in games if game.state is active_state]
+            return [game.id for game in games if game.state is GameDAO.GAME_STATE_IN_PROGRESS]
 
     def create_game(self, game_id, columns, rows, players):
         with self.app.app_context():
